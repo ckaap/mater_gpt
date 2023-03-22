@@ -1,51 +1,35 @@
-# CHATGPT
+Вот инструкции для запуска контейнера на машине с Ubuntu 22.04:
 
-Telegram Bot with OpenAI GPT-3.5-turbo connection, context, Stability AI painting and Google scraping
+Установите Docker на целевой машине. Выполните следующие команды для установки Docker:
+bash
+Copy code
+sudo apt update
+sudo apt install apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install docker-ce
+Склонируйте ваш репозиторий с проектом на целевой машине, используя git clone. Например:
+bash
+Copy code
+git clone https://github.com/your_username/your_project.git
+Перейдите в каталог проекта:
+bash
+Copy code
+cd your_project
+Соберите Docker-образ, используя Dockerfile, находящийся в каталоге проекта:
+bash
+Copy code
+sudo docker build -t your_image_name .
+Запустите контейнер из созданного образа:
+bash
+Copy code
+sudo docker run --rm -it your_image_name
+Всё готово! Ваш контейнер должен быть запущен на новой машине, и бот должен работать. Убедитесь, что вы указали правильные токены API и другие настройки в коде или файле .env.
 
-You have to get those APIs and set environment variables (or put to .env file):
 
--   TELEGRAM_KEY - contact https://t.me/BotFather
--   OPENAI_KEY - https://openai.com/api/ - $18 free credit, $0.002 per 1K tokens (1K Russian chars), ~$0.002 per response
--   STABILITY_KEY - https://beta.dreamstudio.ai/membership?tab=apiKeys - $10 free credit https://api.stability.ai/docs, $0.002 per image
--   REPLICATE_KEY - https://replicate.com/methexis-inc/img2prompt/api - $0.02 per image
+docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/  
+sudo docker build -t gpt_bot .  
 
-Optional (for payments and translation):
--   STRIPE_KEY - Stripe Live payment token (for subscription payments, provided by BotFather https://core.telegram.org/bots/payments)
--   GOOGLE_KEY - key of Google Cloud Project with Translate API enabled https://cloud.google.com/translate
--   google.json - https://console.cloud.google.com/apis/credentials/key
-
-Optional (for promotion):
--   GROUP_RU=https://t.me/maxsoft_chat_gpt_group
--   GROUP_RU_ID=-1298741298749
--   GROUP_EN=https://t.me/maxsoft_chat_gpt_group_en
--   GROUP_EN_ID=-3987438235682
--   ADMIN=Extender777
--   ADMIN_ID=3498273578
--   ADMIN2=
-
-# LOCAL RUN
-
-- Install NodeJS v.18
-
-```bash
-export PUPPETEER_SKIP_DOWNLOAD=1 #for aarch64 
-npm install
-node index.js
-```
-
-# PROD
-
--   https://t.me/maxsoft_chat_bot
-    -   https://t.me/maxsoft_chat_gpt_group
-    -   https://t.me/maxsoft_chat_gpt_group_en
-
-# TODO
-
--   [x] Temperature separated
--   [x] Detect >500 abuse
--   [x] Context forget/reset timeout
--   [x] DDOS protection
--   [x] DDOS of RU group - 5 requests per hour to user
--   [x] Language from user.language_code
--   [x] Parse tokens consumed to money.json
--   [x] Docker
+docker run -d --name chatgpt-master --restart always -e OPENAI_KEY="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" -e TELEGRAM_KEY="6156548654:AAHjQvGAv6Ga_u4VWkBmp4KvZT2LG9nS9YY" chatgpt-master  
+1acb790320d2 265f88cb178d 9831b6d5fdd7 ec4a25fc2d6b fd2ec33316b4 da6939cf6291 ee45e962f1af 10941f7746bf 52b39a221300 5aac2fd27038 
