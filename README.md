@@ -29,7 +29,7 @@ sudo docker run --rm -it your_image_name
 
 
 docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/  
-sudo docker build -t gpt_bot .  
+sudo docker build -t chatgpt-master .  
 
 docker run -d --name chatgpt-master --restart always -e OPENAI_KEY="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" -e TELEGRAM_KEY="6156548654:AAHjQvGAv6Ga_u4VWkBmp4KvZT2LG9nS9YY" chatgpt-master  
 1acb790320d2 265f88cb178d 9831b6d5fdd7 ec4a25fc2d6b fd2ec33316b4 da6939cf6291 ee45e962f1af 10941f7746bf 52b39a221300 5aac2fd27038 
