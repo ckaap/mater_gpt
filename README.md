@@ -20,7 +20,7 @@ cd your_project
 
 sudo docker build -t your_image_name .  
 
-## Запустите контейнер из созданного образа:  
+## Запустите контейнер из созданного образа в интерактивном режиме для проверки работы бота:  
 
 sudo docker run --rm -it your_image_name  
 
@@ -30,4 +30,5 @@ sudo docker run --rm -it your_image_name
 docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/   
 sudo docker build -t chatgpt-master .  
 
-docker run -d --name chatgpt-master --restart always -e OPENAI_KEY="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" -e TELEGRAM_KEY="6156548654:AAHjQvGAv6Ga_u4VWkBmp4KvZT2LG9nS9YY" chatgpt-master  
+docker run -d --name chatgpt-master --restart always  chatgpt-master
+
