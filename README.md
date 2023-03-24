@@ -32,4 +32,5 @@ sudo docker build -t chatgpt-master .
 docker run -d --name chatgpt-master --restart always  chatgpt-master  
 
 ###  Для копирования файла истории сообщений из контейнера докера используйте следующую команду.
-docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/   
+docker ps  (получаем id контейнера)  
+docker cp id_conteiner:/usr/src/app/context.json /home/gpt/   
