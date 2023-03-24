@@ -48,8 +48,8 @@ let PROMO_MAX_PER_HOUR = 5;
 let PROMO = [process.env.GROUP_RU_ID, process.env.GROUP_EN_ID];
 let GOOGLE_PROJECT = `projects/${process.env.GOOGLE_KEY}/locations/global`;
 
-const openai = new OpenAIApi(new Configuration({ apiKey: "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" }));
-const bot = new TelegramBot("6156548654:AAHjQvGAv6Ga_u4VWkBmp4KvZT2LG9nS9YY", { polling: true });
+const openai = new OpenAIApi(new Configuration({ apiKey: process.env.OPENAI_KEY }));
+const bot = new TelegramBot(process.env.TELEGRAM_KEY, { polling: true });
 const translation = new TranslationServiceClient();
 
 const context = readContext();
