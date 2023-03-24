@@ -27,7 +27,7 @@ sudo docker run --rm -it your_image_name
 
 ### Всё готово! Ваш контейнер должен быть запущен на новой машине, и бот должен работать. Убедитесь, что вы указали правильные токены API и другие настройки в коде или файле .env.  
 
-
+npm install dotenv  
 sudo docker build -t chatgpt-master .  
 
 docker run -d --name chatgpt-master --restart always  chatgpt-master
