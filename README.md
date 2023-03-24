@@ -12,23 +12,26 @@ sudo apt install docker-ce
 ### Склонируйте ваш репозиторий с проектом на целевой машине, используя git clone. Например:  
 
 git clone https://github.com/your_username/your_project.git  
+
 ### Перейдите в каталог проекта:  
 
 cd your_project  
 
-## Соберите Docker-образ, используя Dockerfile, находящийся в каталоге проекта:  
+### Соберите Docker-образ, используя Dockerfile, находящийся в каталоге проекта:  
 
 sudo docker build -t your_image_name .  
 
-## Запустите контейнер из созданного образа в интерактивном режиме для проверки работы бота:  
+### Запустите контейнер из созданного образа в интерактивном режиме для проверки работы бота:  
 
 sudo docker run --rm -it your_image_name  
 
 ## Всё готово! Ваш контейнер должен быть запущен на новой машине, и бот должен работать. Убедитесь, что вы указали правильные токены API и другие настройки в коде или файле .env.  
 
 
-docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/   
+
 sudo docker build -t chatgpt-master .  
 
 docker run -d --name chatgpt-master --restart always  chatgpt-master
 
+###  Для копирования файла истории сообщений из контейнера докера используйте следующую команду.
+docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/   
