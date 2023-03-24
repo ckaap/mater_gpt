@@ -29,7 +29,7 @@ sudo docker run --rm -it your_image_name
 
 npm install dotenv  
 sudo docker build -t chatgpt-master .  
-docker run -d --name chatgpt-master --restart always  chatgpt-master
+docker run -d --name chatgpt-master --restart always  chatgpt-master  
 
 ###  Для копирования файла истории сообщений из контейнера докера используйте следующую команду.
 docker cp c7e8b293ebcf:/usr/src/app/context.json /home/gpt/   
