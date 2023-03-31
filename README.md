@@ -18,6 +18,7 @@ git clone https://github.com/your_username/your_project.git
 cd your_project  
 
 ### В файл.env добавьте свои данные API telegram бота и ChatGPT  
+nano .env 
 
 ### Соберите Docker-образ, используя Dockerfile, находящийся в каталоге проекта:  
 
