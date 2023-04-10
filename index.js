@@ -2,7 +2,6 @@ import { config } from 'dotenv';
 config();
 import fs from 'fs';
 import fetch from "node-fetch";
-import { TranslationServiceClient } from "@google-cloud/translate";
 import { Configuration, OpenAIApi } from "openai";
 import TelegramBot from "node-telegram-bot-api";
 import Replicate from "replicate-js";
@@ -28,7 +27,7 @@ import {
 import dotenv from "dotenv";
 dotenv.config({ override: true });
 
-let CONTEXT_SIZE = 400; // increase can negatively affect your bill, 1 Russian char == 1 token
+let CONTEXT_SIZE = 5000; // increase can negatively affect your bill, 1 Russian char == 1 token
 let MAX_TOKENS = 1000;
 let MAX_LENGTH = 300;
 let PREMIUM = 2.0;
@@ -43,15 +42,12 @@ let OPENAI_PRICE = 0.002;
 let IMAGE_PRICE = 0.002;
 let OCR_PRICE = 0.02;
 
-let PROMO_MAX_PER_MINUTE = 15;
+let PROMO_MAX_PER_MINUTE = 25;
 let PROMO_MAX_PER_HOUR = 5;
 let PROMO = [process.env.GROUP_RU_ID, process.env.GROUP_EN_ID];
-let GOOGLE_PROJECT = `projects/${process.env.GOOGLE_KEY}/locations/global`;
 
 const openai = new OpenAIApi(new Configuration({ apiKey: process.env.OPENAI_KEY }));
 const bot = new TelegramBot(process.env.TELEGRAM_KEY, { polling: true });
-const translation = new TranslationServiceClient();
-
 const context = readContext();
 const skip = readSkip();
 const trial = readTrial();
@@ -74,6 +70,37 @@ bot.on("pre_checkout_query", async (query) => {
     bot.answerPreCheckoutQuery(query.id, true);
 });
 
+const botUsername = 'LemonGPT_Bot';
+function hasBotMention(msg, botUsername) {
+    if (!msg.entities) {
+        return false;
+    }
+
+    const mentionEntities = msg.entities.filter(
+        (entity) => entity.type === 'mention' || entity.type === 'text_mention'
+    );
+
+    const result = mentionEntities.some((entity) => {
+        if (entity.type === 'mention') {
+            const username = msg.text.slice(entity.offset + 1, entity.offset + entity.length);
+            console.log('Checking mention:', username);
+            return username === botUsername;
+        } else if (entity.type === 'text_mention') {
+            return entity.user.username === botUsername;
+        }
+        return false;
+    });
+
+    if (!result) {
+        // Check if the message contains the bot username without a command
+        const botUsernamePattern = new RegExp(`\\b${botUsername}\\b`);
+        if (botUsernamePattern.test(msg.text)) {
+            return true;
+        }
+    }
+    return result;
+}
+
 bot.on("message", async (msg) => {
     try {
         if (protection(msg)) {
@@ -82,96 +109,32 @@ bot.on("message", async (msg) => {
         // Technical stuff
         const chatId = msg.chat.id;
         const msgL = msg.text?.toLowerCase();
-        if (msgL) {
-            if (processCommand(chatId, msgL, msg.from?.language_code)) {
-                return;
-            }
-        }
-        if (msg.successful_payment) {
-            console.log("Payment done for ", chatId, msg.successful_payment.invoice_payload);
-            var d = new Date();
-            d.setMonth(d.getMonth() + 1);
-            opened[msg.successful_payment.invoice_payload ?? chatId] = d;
-            writeOpened(opened);
-            bot.sendMessage(
-                msg.successful_payment.invoice_payload ?? chatId,
-                msg.from?.language_code == "ru"
-                    ? "Оплата произведена! Спасибо. Бот теперь доступен на один месяц ❤️"
-                    : "Payment complete! Thank you. This bot is now available for a period of one month ❤️"
-            );
-            bot.sendMessage(
-                process.env.ADMIN_ID,
-                "Произведена оплата от " +
-                    msg?.from?.username +
-                    " " +
-                    msg?.from?.id +
-                    " " +
-                    msg.successful_payment.invoice_payload
-            );
+
+        // Если это не личный чат и нет упоминания бота, не обрабатывать сообщение
+        if (msg.chat.type !== 'private' && !hasBotMention(msg, botUsername)) {
             return;
         }
 
-        trial[chatId] = (trial[chatId] ?? 0) + 1;
-        writeTrial(trial);
-
-        if (process.env.STRIPE_KEY) {
-            if (!(new Date(opened[chatId]) > new Date())) {
-                bot.sendMessage(
-                    chatId,
-                    msg.from?.language_code == "ru"
-                        ? `Полная функциональность появится после оплаты ❤️ Приглашаем вас присоединиться к нашей группе и попробовать бота в ней 😊 ${process.env.GROUP_RU}`
-                        : `Full functionality will appear after payment ❤️ We invite you to join our group to try the bot 😊 ${process.env.GROUP_EN}`
-                )
-                    .then(() => {})
-                    .catch((e) => {
-                        console.error(e.message);
-                    });
-                sendInvoice(chatId, msg.from?.language_code);
-                return;
+        if (msgL) {
+            if (msgL.startsWith('/') || hasBotMention(msg, botUsername)) {
+                const commandProcessed = processCommand(chatId, msgL, msg.from?.language_code);
+                if (commandProcessed) {
+                    return;
+                }
             }
-            if (
-                !PROMO.includes(String(chatId)) &&
-                ((chatId > 0 && money[chatId] > MAX_MONEY) || (chatId < 0 && money[chatId] > MAX_GROUP_MONEY))
-            ) {
-                console.error("Abuse detected for paid account", chatId);
-                bot.sendMessage(
-                    chatId,
-                    msg.from?.language_code == "ru"
-                        ? "Привет! К сожалению, вы превысили лимит запросов 😏 Это не проблема - вы всегда можете приобрести новую подписку! ❤️"
-                        : "Hello! Unfortunately, you have exceeded your subscription request count 😏 That's not a problem - you can always purchase a new one! ❤️"
-                );
-                bot.sendMessage(
-                    process.env.ADMIN_ID,
-                    "Abuse detected for paid account " +
-                        chatId +
-                        " trials= " +
-                        trial[chatId] +
-                        " money= " +
-                        money[chatId]
-                );
-                trial[chatId] = 0;
-                opened[chatId] = new Date();
-                money[chatId] = 0;
-                writeTrial(trial);
-                writeOpened(opened);
-                writeMoney(money);
-                return;
-            }
+        } else {
+            return;
         }
 
         // Brain activity
         context[chatId] = context[chatId]?.slice(-CONTEXT_SIZE * premium(chatId)) ?? "";
-        if (time[chatId] && new Date() - new Date(time[chatId]) > CONTEXT_TIMEOUT * 1000) {
+        if (time[chatId] && new Date() - new Date(time[chatId]) > CONTEXT_TIMEOUT * 5000) {
             context[chatId] = "";
         }
         time[chatId] = new Date();
         writeTime(time);
         writeContext(context);
 
-        if (msg.photo) {
-            // visual hemisphere (left)
-            visualToText(chatId, msg);
-        }
         if (!msg.text) {
             return;
         }
@@ -200,8 +163,8 @@ const processCommand = (chatId, msg, language_code) => {
         bot.sendMessage(
             chatId,
             language_code == "ru"
-                ? "Нарисуй <что-то>\nЗагугли/Погугли <что-то>\nСброс\nТемпература 36.5 - 41.5\nПропуск <x>\nОтвечай\nРежим <притворись что ты ...>\nЧерез английский <запрос>\n/payment\n/terms\n/terms_group\n/status\n/support"
-                : "Paint <some>\nDraw <some>\nGoogle <some>\nReset\nTemperature 36.5 - 41.5\nSkip <x>\nAnswer\nMode <pretend you are ...>\n/payment\n/terms\n/terms_group\n/status\n/support"
+                ? "/support"
+                : "/support"
         );
         return true;
     }
@@ -209,172 +172,35 @@ const processCommand = (chatId, msg, language_code) => {
         bot.sendMessage(
             chatId,
             language_code == "ru"
-                ? `Привет! Я ChatGPT бот. Я могу говорить с вами на любом языке. Я могу нарисовать все что вы хотите. Вы также можете отправить мне изображение, и я переведу его в текст. Я могу искать в Google любую информацию, которая вам нужна. Используйте /help для списка команд 😊 \n\nНаша группа: ${process.env.GROUP_RU}`
-                : `Hello! I'm ChatGPT. Feel free to speak to me in any language. I can Paint <anything> you want. You can also send me an image, and I will translate it to text. I can search Google for any information you need. Use /help for more options 😊 \n\nJoin our group: ${process.env.GROUP_EN}`
+                ? "Привет! Я ChatGPT бот. Я могу говорить с вами на любом языке. Я могу нарисовать все что вы хотите. Вы также можете отправить мне изображение, и я переведу его в текст. Я могу искать в Google любую информацию, которая вам нужна."
+                : "Hello! I'm ChatGPT bot. I can talk to you in any language. I can draw anything you want. You can also send me an image and I will convert it to text. I can search Google for any information you need."
         );
-        return true;
-    }
-    if (msg.startsWith("/terms_group")) {
-        bot.sendMessage(
-            chatId,
-            language_code == "ru"
-                ? `После оплаты подписки $${GROUP_PRICE} вы можете использовать все функции ChatGPT бота в течение месяца для всей группы (без ограничения количества людей), включая Нарисуй, Загугли, и другие.`
-                : `After making a payment of $${GROUP_PRICE}, you will have access to the ChatGPT bot for one month for entire group (unlimited numer of people), with full features (including Paint, Photo2Text, Google, and more)`
-        );
-        return true;
-    }
-    if (msg.startsWith("/terms")) {
-        bot.sendMessage(
-            chatId,
-            language_code == "ru"
-                ? `После оплаты подписки $${PRICE} в течение месяца вы можете использовать все функции бота, включая Нарисуй, Загугли, и другие без каких-либо ограничений`
-                : `After making a payment of $${PRICE}, you will have access to the ChatGPT bot for one month, with full features (including Paint, Photo2Text, Google, and more) without any limitations`
-        );
-        return true;
-    }
-
-    if (msg.startsWith("/payment")) {
-        sendInvoice(chatId, language_code);
         return true;
     }
     if (msg.startsWith("/support")) {
         bot.sendMessage(
             chatId,
             language_code == "ru"
-                ? `Если у вас возникли проблемы с оплатой, пожалуйста, напишите мне в личные сообщения @${process.env.ADMIN}`
-                : `For any inquiries regarding refunds and cancellations please contact @${process.env.ADMIN}`
+                ? "Если у вас возникли проблемы, пожалуйста, напишите мне в личные сообщения @ckaap"
+                : "If you have any problems, please message me privately @ckaap"
         );
         return true;
     }
-    if (msg.startsWith("/usage")) {
-        bot.sendMessage(chatId, getReport());
-        return true;
-    }
-    if (msg.startsWith("/status")) {
-        bot.sendMessage(
-            chatId,
-            language_code == "ru"
-                ? opened[chatId] && new Date(opened[chatId]) > new Date()
-                    ? "Ваша подписка активна до " + opened[chatId]
-                    : "У вас нет подписки"
-                : opened[chatId] && new Date(opened[chatId]) > new Date()
-                ? "You have an active subscription until " + opened[chatId]
-                : "You have no subscription"
-        );
-        return true;
-    }
-    if (msg === "сброс") {
-        bot.sendMessage(chatId, "Личность уничтожена");
+    if (msg === "сброс" || msg === "reset") {
+        bot.sendMessage(chatId, "Личность уничтожена/Context cleared");
         context[chatId] = "";
         chatSuffix[chatId] = "";
         writeChatSuffix(chatSuffix);
         return true;
     }
-    if (msg === "reset") {
-        bot.sendMessage(chatId, "Context cleared");
-        context[chatId] = "";
-        chatSuffix[chatId] = "";
-        writeChatSuffix(chatSuffix);
-        return true;
-    }
-    if (msg.startsWith("пропуск ")) {
-        skip[chatId] = +msg.slice(8);
+    if (msg.startsWith("пропуск ") || msg.startsWith("skip ") || msg.startsWith("отвечать раз в ")) {
+        const skipValue = +msg.split(" ")[1];
+        skip[chatId] = skipValue;
         writeSkip(skip);
-        bot.sendMessage(chatId, "Отвечать раз в " + skip[chatId]);
-        return true;
-    }
-    if (msg.startsWith("skip ")) {
-        skip[chatId] = +msg.slice(5);
-        writeSkip(skip);
-        bot.sendMessage(chatId, "Skip " + skip[chatId]);
-        return true;
-    }
-    if (msg.startsWith("отвечать раз в ")) {
-        skip[chatId] = +msg.slice(15);
-        writeSkip(skip);
-        bot.sendMessage(chatId, "Отвечать раз в " + skip[chatId]);
-        return true;
-    }
-
-    if (msg === "режим" || msg === "режим обычный") {
-        chatSuffix[chatId] = "";
-        context[chatId] = "";
-        writeChatSuffix(chatSuffix);
-        bot.sendMessage(chatId, "Режим обычный");
-        return true;
-    }
-    if (msg.startsWith("режим ")) {
-        chatSuffix[chatId] = "(" + msg.substring(6, 100) + ")";
-        context[chatId] = "";
-        writeChatSuffix(chatSuffix);
-        bot.sendMessage(chatId, "Режим установлен");
-        return true;
-    }
-    if (msg === "mode" || msg === "mode usual") {
-        chatSuffix[chatId] = "";
-        context[chatId] = "";
-        writeChatSuffix(chatSuffix);
-        bot.sendMessage(chatId, "Usual mode");
-        return true;
-    }
-    if (msg.startsWith("mode ")) {
-        chatSuffix[chatId] = "(" + msg?.substring(5, 100) + ")";
-        context[chatId] = "";
-        writeChatSuffix(chatSuffix);
-        bot.sendMessage(chatId, "Mode set");
-        return true;
-    }
-
-    if (msg.startsWith("температура ")) {
-        temp[chatId] = +msg.slice(12)?.replace(",", ".");
-        writeTemp(temp);
-        bot.sendMessage(chatId, "Температура установлена в " + temp[chatId]);
-        return true;
-    }
-
-    if (msg.startsWith("temperature ")) {
-        temp[chatId] = +msg.slice(12)?.replace(",", ".");
-        writeTemp(temp);
-        bot.sendMessage(chatId, "Temperature set to " + temp[chatId]);
+        bot.sendMessage(chatId, "Отвечать раз в " + skipValue + "/Answer every " + skipValue);
         return true;
     }
 };
-
-const sendInvoice = (chatId, language_code) => {
-    bot.sendInvoice(
-        chatId,
-        language_code == "ru" ? "Требуется оплата" : "Need payment",
-        language_code == "ru" ? "Подписка ChatGPT на 1 месяц" : "1-month access to ChatGPT",
-        chatId,
-        process.env.STRIPE_KEY,
-        "USD",
-        [
-            {
-                label:
-                    chatId > 0
-                        ? language_code == "ru"
-                            ? "Полный доступ к P2P чату"
-                            : "full access to P2P chat"
-                        : language_code == "ru"
-                        ? "Полный доступ к групповому чату"
-                        : "full access to GROUP chat",
-                amount: chatId > 0 ? PRICE * 100 : GROUP_PRICE * 100,
-            },
-        ],
-        {
-            photo_url: "https://blog.maxsoft.tk/AI.png",
-            need_name: false,
-            need_phone_number: false,
-            need_email: false,
-            need_shipping_address: false,
-        }
-    )
-        .then(() => {})
-        .catch((e) => {
-            console.error(e.message);
-        });
-};
-
 
 const textToText = async (chatId, msg) => {
     count[chatId] = (count[chatId] ?? 0) + 1;
@@ -424,9 +250,9 @@ const textToText = async (chatId, msg) => {
         last[chatId] = response;
         context[chatId] = context[chatId] + response;
     
-        // Удаляем старые сообщения, если длина контекста превышает 1000
-        if (context[chatId].length > 1000) {
-            context[chatId] = context[chatId].slice(-1000);
+        // Удаляем старые сообщения, если длина контекста превышает 5000
+        if (context[chatId].length > 5000) {
+            context[chatId] = context[chatId].slice(-5000);
         }
     
         fs.writeFile("context.json", JSON.stringify(context), () => {});
@@ -476,7 +302,6 @@ const getText = async (prompt, temperature, max_tokens, chatId) => {
         // }
     }
 };
-
 
 const premium = (chatId) => {
     if (opened[chatId] && chatId > 0) {
@@ -588,4 +413,3 @@ const getReport = () => {
 
 process.env["NTBA_FIX_350"] = 1;
 process.env["NODE_NO_WARNINGS"] = 1;
-process.env["GOOGLE_APPLICATION_CREDENTIALS"] = "./google.json";
